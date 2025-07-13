@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -37,12 +37,24 @@ import QuizIcon from '@mui/icons-material/Quiz';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import AddIcon from '@mui/icons-material/Add';
+import { fetchQuestions, fetchEvaluationResults } from '../api';
 
 // 题目管理组件
 const QuestionsManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchQuestions()
+      .then(res => setQuestions(res.data))
+      .catch(err => setError('获取题目失败'))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleMenuOpen = (event, questionId) => {
     setAnchorEl(event.currentTarget);
@@ -52,46 +64,6 @@ const QuestionsManagement = () => {
   const handleMenuClose = () => {
     setAnchorEl(null);
   };
-
-  // 模拟题目数据
-  const questions = [
-    {
-      id: 1,
-      title: '大模型基础知识',
-      type: 'multiple_choice',
-      count: 15,
-      difficulty: 'medium',
-      category: '通用知识',
-      createdAt: '2023-06-15',
-    },
-    {
-      id: 2,
-      title: '人工智能伦理问题',
-      type: 'essay',
-      count: 5,
-      difficulty: 'hard',
-      category: '伦理',
-      createdAt: '2023-06-10',
-    },
-    {
-      id: 3,
-      title: '机器学习基础',
-      type: 'mixed',
-      count: 20,
-      difficulty: 'easy',
-      category: '技术',
-      createdAt: '2023-06-05',
-    },
-    {
-      id: 4,
-      title: '自然语言处理技术',
-      type: 'short_answer',
-      count: 10,
-      difficulty: 'medium',
-      category: '技术',
-      createdAt: '2023-06-01',
-    },
-  ];
 
   const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
@@ -172,37 +144,45 @@ const QuestionsManagement = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {questions.map((question) => (
-              <TableRow key={question.id} hover>
-                <TableCell component="th" scope="row">
-                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                    {question.title}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    label={getTypeLabel(question.type)}
-                    size="small"
-                    variant="outlined"
-                  />
-                </TableCell>
-                <TableCell>{question.count}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={question.difficulty === 'easy' ? '简单' : question.difficulty === 'medium' ? '中等' : '困难'}
-                    size="small"
-                    color={getDifficultyColor(question.difficulty)}
-                  />
-                </TableCell>
-                <TableCell>{question.category}</TableCell>
-                <TableCell>{question.createdAt}</TableCell>
-                <TableCell align="center">
-                  <IconButton size="small" onClick={(e) => handleMenuOpen(e, question.id)}>
-                    <MoreVertIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
+            {loading ? (
+              <TableRow><TableCell colSpan={7} align="center">加载中...</TableCell></TableRow>
+            ) : error ? (
+              <TableRow><TableCell colSpan={7} align="center">{error}</TableCell></TableRow>
+            ) : questions.length === 0 ? (
+              <TableRow><TableCell colSpan={7} align="center">暂无数据</TableCell></TableRow>
+            ) : (
+              questions.map((question) => (
+                <TableRow key={question.id} hover>
+                  <TableCell component="th" scope="row">
+                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                      {question.title}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={getTypeLabel(question.type)}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </TableCell>
+                  <TableCell>{question.count}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={question.difficulty === 'easy' ? '简单' : question.difficulty === 'medium' ? '中等' : '困难'}
+                      size="small"
+                      color={getDifficultyColor(question.difficulty)}
+                    />
+                  </TableCell>
+                  <TableCell>{question.category}</TableCell>
+                  <TableCell>{question.createdAt}</TableCell>
+                  <TableCell align="center">
+                    <IconButton size="small" onClick={(e) => handleMenuOpen(e, question.id)}>
+                      <MoreVertIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </TableContainer>
@@ -245,34 +225,17 @@ const QuestionsManagement = () => {
 // 评测结果管理组件
 const ResultsManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [evaluationResults, setEvaluationResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // 模拟评测结果数据
-  const evaluationResults = [
-    {
-      id: 1,
-      title: 'GPT-4与国产大模型对比评测',
-      models: ['GPT-4', 'ChatGLM', '文心一言'],
-      questionSet: '通用知识评测集',
-      date: '2023-06-15',
-      status: 'completed',
-    },
-    {
-      id: 2,
-      title: '金融领域专业知识评测',
-      models: ['GPT-3.5', 'Llama-2'],
-      questionSet: '金融知识评测集',
-      date: '2023-06-10',
-      status: 'completed',
-    },
-    {
-      id: 3,
-      title: '医疗问答能力评测',
-      models: ['Claude', 'Bard', 'Ernie'],
-      questionSet: '医疗知识评测集',
-      date: '2023-06-05',
-      status: 'completed',
-    },
-  ];
+  useEffect(() => {
+    setLoading(true);
+    fetchEvaluationResults()
+      .then(res => setEvaluationResults(res.data))
+      .catch(err => setError('获取评测结果失败'))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <Box>
@@ -305,42 +268,50 @@ const ResultsManagement = () => {
       </Box>
 
       <Grid container spacing={2}>
-        {evaluationResults.map((result) => (
-          <Grid item xs={12} md={6} lg={4} key={result.id}>
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  {result.title}
-                </Typography>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  评测日期: {result.date}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  题目集: {result.questionSet}
-                </Typography>
-                <Box sx={{ mt: 2, mb: 1 }}>
-                  <Typography variant="body2" gutterBottom>
-                    评测模型:
+        {loading ? (
+          <Grid item xs={12} align="center">加载中...</Grid>
+        ) : error ? (
+          <Grid item xs={12} align="center">{error}</Grid>
+        ) : evaluationResults.length === 0 ? (
+          <Grid item xs={12} align="center">暂无数据</Grid>
+        ) : (
+          evaluationResults.map((result) => (
+            <Grid item xs={12} md={6} lg={4} key={result.id}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    {result.title}
                   </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {result.models.map((model) => (
-                      <Chip key={model} label={model} size="small" variant="outlined" sx={{ mr: 0.5, mb: 0.5 }} />
-                    ))}
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    评测日期: {result.date}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    题目集: {result.questionSet}
+                  </Typography>
+                  <Box sx={{ mt: 2, mb: 1 }}>
+                    <Typography variant="body2" gutterBottom>
+                      评测模型:
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {result.models.map((model) => (
+                        <Chip key={model} label={model} size="small" variant="outlined" sx={{ mr: 0.5, mb: 0.5 }} />
+                      ))}
+                    </Box>
                   </Box>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  <Button size="small" startIcon={<AssessmentIcon />} sx={{ mr: 1 }}>
-                    查看详情
-                  </Button>
-                  <Button size="small" startIcon={<DownloadIcon />}>
-                    导出报告
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                    <Button size="small" startIcon={<AssessmentIcon />} sx={{ mr: 1 }}>
+                      查看详情
+                    </Button>
+                    <Button size="small" startIcon={<DownloadIcon />}>
+                      导出报告
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        )}
       </Grid>
     </Box>
   );
