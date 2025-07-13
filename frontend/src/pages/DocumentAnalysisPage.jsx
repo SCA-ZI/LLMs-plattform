@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -29,23 +29,34 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ArticleIcon from '@mui/icons-material/Article';
+import { fetchDocuments, uploadDocument, fetchDocumentAnalysis } from '../api';
 
 // 文档上传组件
 const DocumentUpload = () => {
   const [uploading, setUploading] = useState(false);
-  const [recentDocuments, setRecentDocuments] = useState([
-    { id: 1, name: '大模型评测指南.pdf', type: 'pdf', size: '2.4 MB', date: '2023-06-15' },
-    { id: 2, name: '人工智能伦理白皮书.docx', type: 'docx', size: '1.8 MB', date: '2023-06-10' },
-    { id: 3, name: '模型评测标准.txt', type: 'txt', size: '0.5 MB', date: '2023-06-05' },
-  ]);
+  const [recentDocuments, setRecentDocuments] = useState([]);
+  const [error, setError] = useState(null);
 
-  const handleUpload = () => {
+  useEffect(() => {
+    fetchDocuments()
+      .then(res => setRecentDocuments(res.data))
+      .catch(() => setError('获取文档列表失败'));
+  }, []);
+
+  const handleUpload = async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
     setUploading(true);
-    // 模拟上传过程
-    setTimeout(() => {
-      setUploading(false);
-      // 这里将来会添加新上传的文档到列表
-    }, 2000);
+    setError(null);
+    try {
+      await uploadDocument(file);
+      // 上传成功后刷新文档列表
+      const res = await fetchDocuments();
+      setRecentDocuments(res.data);
+    } catch (e) {
+      setError('上传失败');
+    }
+    setUploading(false);
   };
 
   const getFileIcon = (type) => {
@@ -105,10 +116,11 @@ const DocumentUpload = () => {
               variant="contained" 
               color="primary" 
               startIcon={<UploadFileIcon />}
-              onClick={handleUpload}
+              component="label"
               disabled={uploading}
             >
               {uploading ? '上传中...' : '选择文件'}
+              <input type="file" hidden onChange={handleUpload} />
             </Button>
           </Paper>
         </Grid>
@@ -121,33 +133,43 @@ const DocumentUpload = () => {
             <Divider sx={{ mb: 2 }} />
 
             <List>
-              {recentDocuments.map((doc) => (
-                <ListItem
-                  key={doc.id}
-                  secondaryAction={
-                    <Box>
-                      <IconButton edge="end" aria-label="preview" sx={{ mr: 1 }}>
-                        <VisibilityIcon />
-                      </IconButton>
-                      <IconButton edge="end" aria-label="delete">
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  }
-                >
-                  <ListItemIcon>
-                    {getFileIcon(doc.type)}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={doc.name}
-                    secondary={
-                      <Typography variant="body2" color="text.secondary">
-                        {doc.size} • 上传于 {doc.date}
-                      </Typography>
+              {error ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="error">{error}</Typography>
+                </Box>
+              ) : recentDocuments.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <Typography variant="body2" color="text.secondary">暂无上传文档</Typography>
+                </Box>
+              ) : (
+                recentDocuments.map((doc) => (
+                  <ListItem
+                    key={doc.id}
+                    secondaryAction={
+                      <Box>
+                        <IconButton edge="end" aria-label="preview" sx={{ mr: 1 }}>
+                          <VisibilityIcon />
+                        </IconButton>
+                        <IconButton edge="end" aria-label="delete">
+                          <DeleteIcon />
+                        </IconButton>
+                      </Box>
                     }
-                  />
-                </ListItem>
-              ))}
+                  >
+                    <ListItemIcon>
+                      {getFileIcon(doc.type)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={doc.name}
+                      secondary={
+                        <Typography variant="body2" color="text.secondary">
+                          {doc.size} • 上传于 {doc.date}
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                ))
+              )}
             </List>
 
             {recentDocuments.length === 0 && (
@@ -210,7 +232,36 @@ const DocumentPreview = () => {
 };
 
 // 拆解结果组件
-const DocumentResults = () => {
+const DocumentResults = ({ documentId = null }) => {
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!documentId) return;
+    setLoading(true);
+    fetchDocumentAnalysis(documentId)
+      .then(res => setResult(res.data))
+      .catch(() => setError('获取拆解结果失败'))
+      .finally(() => setLoading(false));
+  }, [documentId]);
+
+  if (!documentId) {
+    return <Typography color="text.secondary" sx={{ p: 3 }}>请先选择文档</Typography>;
+  }
+
+  if (loading) {
+    return <Typography color="text.secondary" sx={{ p: 3 }}>加载中...</Typography>;
+  }
+
+  if (error) {
+    return <Typography color="error" sx={{ p: 3 }}>{error}</Typography>;
+  }
+
+  if (!result) {
+    return <Typography color="text.secondary" sx={{ p: 3 }}>暂无数据</Typography>;
+  }
+
   return (
     <Box>
       <Typography variant="h5" component="h1" gutterBottom>
@@ -222,65 +273,46 @@ const DocumentResults = () => {
 
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">拆解结果</Typography>
+          <Typography variant="h6">{result.document_name}</Typography>
           <Chip icon={<CheckCircleIcon />} label="拆解完成" color="success" />
         </Box>
         <Divider sx={{ mb: 3 }} />
 
         <Typography variant="subtitle1" gutterBottom>
-          文档：大模型评测指南.pdf
+          文档：{result.document_name}
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
-          已生成 15 道题目，包含 8 道选择题，5 道判断题，2 道简答题
+          已生成 {result.total_questions} 道题目
         </Typography>
 
         <Grid container spacing={2} sx={{ mt: 2 }}>
           <Grid item xs={12}>
-            <Card variant="outlined" sx={{ mb: 2 }}>
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    选择题 #1
-                  </Typography>
-                  <Chip label="中等" size="small" color="primary" variant="outlined" />
-                </Box>
-                <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
-                  评测大模型通常从哪些维度进行？
-                </Typography>
-                <Box sx={{ pl: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    A. 代码行数、运行速度、内存占用
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    B. 硬件要求、训练成本、部署难度
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1, bgcolor: 'success.light', p: 1, borderRadius: 1 }}>
-                    C. 知识广度、推理能力、创造力、指令遵循能力、安全性
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    D. 用户数量、市场份额、商业价值
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-
-            <Card variant="outlined">
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="subtitle2" color="text.secondary">
-                    判断题 #1
-                  </Typography>
-                  <Chip label="简单" size="small" color="success" variant="outlined" />
-                </Box>
-                <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
-                  评测大模型时，只需关注模型的知识广度，无需考虑其他能力。
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <Chip label="正确" size="small" variant="outlined" />
-                  <Chip label="错误" size="small" color="error" />
-                </Box>
-              </CardContent>
-            </Card>
+            {result.questions && result.questions.length > 0 ? (
+              result.questions.map((q, idx) => (
+                <Card variant="outlined" sx={{ mb: 2 }} key={q.id}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        {q.type} #{idx + 1}
+                      </Typography>
+                      <Chip label={q.difficulty || '未知'} size="small" color="primary" variant="outlined" />
+                    </Box>
+                    <Typography variant="body1" sx={{ fontWeight: 'medium', mb: 2 }}>
+                      {q.content}
+                    </Typography>
+                    {q.options && q.options.length > 0 && (
+                      <Box sx={{ pl: 2 }}>
+                        {q.options.map((opt, i) => (
+                          <Typography variant="body2" sx={{ mb: 1 }} key={i}>{opt}</Typography>
+                        ))}
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Typography color="text.secondary">暂无题目</Typography>
+            )}
           </Grid>
         </Grid>
 
